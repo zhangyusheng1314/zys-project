@@ -1,15 +1,15 @@
 package com.zys.store.service.provider;
 
 import com.alibaba.dubbo.config.annotation.Service;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.zys.store.dao.StoreDao;
-import com.zys.store.service.StoreService;
 import com.zys.store.service.api.StoreServiceApi;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
 import java.util.Date;
-
+/**
+ * 暴露的接口的实现类
+ */
 @Component
 @Service(
         version = "1.0.0",

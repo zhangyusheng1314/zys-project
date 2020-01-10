@@ -8,6 +8,9 @@ import org.apache.rocketmq.common.message.Message;
 import org.apache.rocketmq.remoting.exception.RemotingException;
 import org.springframework.stereotype.Component;
 
+/**
+ * 发送回调通知order下订单模块 扣款成功
+ */
 @Component
 public class SyncProducer {
     private DefaultMQProducer defaultMQProducer;

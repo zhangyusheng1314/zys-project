@@ -75,6 +75,7 @@ public class PayServiceImpl extends ServiceImpl<PayDao, CustomerAccount> impleme
                 //生产者发送自定义方法
                 TransactionSendResult sendResult = transactionProducer.sendMessage(message,map);
                 countDownLatch.await();
+                //扣款消息发送成功且事务已经提交成功
                 if (sendResult.getSendStatus()== SendStatus.SEND_OK
                         && sendResult.getLocalTransactionState()== LocalTransactionState.COMMIT_MESSAGE) {
                     //回调订单模块 通知支付成功

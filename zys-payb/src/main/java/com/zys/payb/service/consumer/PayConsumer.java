@@ -19,6 +19,9 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 消费paya端来的事务扣款消息
+ */
 @Component
 public class PayConsumer {
 	private @Resource

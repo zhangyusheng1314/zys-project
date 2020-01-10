@@ -54,7 +54,9 @@ mybatis-plus:
 dubbo:
   application:
     id: zys-store
+    #注册在注册中心的名称,唯一标识
     name: zys-store
+    #dubbo在线运维命令服务，对获取当前提供和消费的所有服务，以及对服务进行动态的上下线
     qos-port: 22212
     qos-enable: true
   scan:
@@ -62,7 +64,9 @@ dubbo:
   protocol:
     id: dubbo
     name: dubbo
+    #暴露服务端口(默认为20880,修改端口,不同的服务提供者端口不能重复)
     port: 20882
+  #注册中心配置,用于配置连接注册中心相关信息
   registry:
     id: zys-store-registry
     address: zookeeper://192.168.146.128:2181

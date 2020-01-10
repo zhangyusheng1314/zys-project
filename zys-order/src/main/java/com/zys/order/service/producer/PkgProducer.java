@@ -11,6 +11,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * 下单成功后发送顺序消息给物流模块（必须按照消息顺序来消费消息）
+ */
 @Component
 public class PkgProducer {
     private DefaultMQProducer defaultMQProducer;

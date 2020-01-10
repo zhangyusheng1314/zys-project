@@ -18,6 +18,9 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 接受order端来的消息进行消费
+ */
 @Component
 public class PkgConsumer {
 	private @Resource

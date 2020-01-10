@@ -1,0 +1,132 @@
+nameserver集群是注册中心，提供协调服务，相对于zookeeper更加轻量级 因为nameserver节点之间互相独立，没有交互，不存在主从切换的问题
+broker集群是具体提供业务的服务器，单个broker与所有的nameserver节点保持长连接以及心跳，并定时将topic信息注册到nameserver
+topic/queue topic只代表普通队列，queue则是topic中更小的单元队列，集群消费模式下消费者只消费topic中的部分queue的消息，消费者开启广播模式则消费所有queue
+Tags是Topic下的次级消息类型
+producer 单个Producer和一台nameserver保持长连接，无心跳
+               单个Producer和与其关联的所有broker保持长连接，并维持心跳，默认情况下消息发送采用轮询方式，会均匀发到对应Topic的所有queue中。
+consumer 单个Consumer和一台nameserver保持长连接，无心跳
+	单个Consumer和与其关联的所有broker保持长连接，并维持心跳，失去心跳后，则关闭连接，并向该消费者分组的所有消费者发出通知，分组内消费者重新分配队列继续消费。
+
+
+rocketmq的可视化控制台，github下载rocketmq-console 修改配置文件地址，多地址用分号隔开
+
+单机模式搭建
+1.配置hosts vi /etc/hosts
+  192.168.146.128 rocketmq-nameserver1
+  192.168.146.128 rocketmq-master1
+2.解压 建立软连接
+3.创建存储路径
+  mkdir /usr/local/rocketmq/store 
+  mkdir /usr/local/rocketmq/store/commitlog  //消息的存储目录 也存储了ConsumeQueue中的offset的信息
+  mkdir /usr/local/rocketmq/store/consumequeue //消息消费队列存储目录 存储消息在commitlog中的位置，根据CommitLog，生成ConsumeQueue的信息，其记录了每个queue的物理commitOffset和逻辑logicOffset的信息；
+  mkdir /usr/local/rocketmq/store/index   //消息索引文件存储目录
+4.修改日志配置文件
+   mkdir -p /usr/local/rocketmq/logs
+   cd /usr/local/rocketmq/conf && sed -i 's#${user.home}#/usr/local/rocketmq#g' *.xml（将rocketmq中的xml文件进行全局替换）
+5.配置启动脚本的参数的内存值为1g(vim /usr/local/rocketmq/bin/runbroker.sh runserver.sh)
+6.配置conf里面的配置文件broker-a.properties等（配置集群名字，broker的名字，broker的是主是从等）
+7.启动停止namesrv跟broker
+   nohup sh mqnamesrv &
+   nohup sh mqbroker -c /usr/local/rocketmq/conf/2m-2s-async/broker-a.properties >/dev/null 2>&1 &
+   sh mqshutdown broker
+   sh mqshutdown namesrv 
+   （注意配置的是第四步中的哪个conf下的properties，修改相对应的路径）
+
+producer 1.创建生产者DefaultMQProducer
+	2.设置nameserver的地址setNamesrvAddr（）
+	3.启动生产者 start
+	4.消息的创建 Message msg = new Message（topic，tags，keys，body）
+	5.同步发送 send(message） 异步发送 send(message,new SendCallback)
+	6。关闭  shutdowm
+consumer 1.创建消费者
+	2.设置nameserver的地址 setNamesrvAddr（）
+	3.设置消费开始的位置ConsumeFromWhere
+	4.订阅消费的主题 subscribe
+	5.对消息的消费进行监听 registerMessageListener
+	6.启动消费者 start
+
+主从模式搭建（当主节点宕机之后，可以消费消息，当主节点恢复之后，不会重复消费相同的消息）
+1.主从都配置hosts vi /etc/hosts
+  192.168.146.128 rocketmq-nameserver1
+  192.168.146.128 rocketmq-master1
+  192.168.146.135 rocketmq-nameserver2
+  192.168.146.135 rocketmq-master1-slave
+2345同上单机配置
+6.主节点配置broker-a.properties  （brokerId=0表是是主节点，地址配置rocketmq-nameserver1:9876;rocketmq-nameserver2:9876 brokerRole=ASYNC_MASTER）
+   从节点配置broker-a-s.properties（brokerId>0表是是从节点 地址配置rocketmq-nameserver1:9876;rocketmq-nameserver2:9876 brokerRole=SLAVE）
+7.启动停止namesrv跟broker(启动broker的时候要注意主从节点修改的配置文件的名字)
+   主节点启动nohup sh mqnamesrv &
+  	   nohup sh mqbroker -c /usr/local/rocketmq/conf/2m-2s-async/broker-a.properties >/dev/null 2>&1 &
+   从节点启动nohup sh mqnamesrv &
+	   nohup sh mqbroker -c /usr/local/rocketmq/conf/2m-2s-async/broker-a-s.properties >/dev/null 2>&1 &
+8主从同步的机制 
+   1.包括两部分数据  元数据（配置信息）和实际的数据内容（存储到commitlog）  
+   2.元数据 先识别broker是否是slave 然后同步一些配置信息（比如topic的配置 订阅组的配置 消费者偏移量 延迟偏移量）用的定时器 用的netty  
+   3.实际数据内容用的是原生的socket实时同步
+     slave节点：HAService  对master节点连接 读写数据
+     master节点：HAConnection  acceptSocketService 接受slave的连接 readSocketService读来自slave的数据  writeSocketService写往slave的数据
+     slave->master 上报commitlog已经同步到的物理位置  maxPhyOffset 最大的物理位置
+     master->slave 传输新的commitlog数据  fromPhyOffset 开始的物理位置
+     通过判断maxPhyOffset和fromPhyOffset是否相同来决定是否同步
+
+9同步异步发消息
+
+10netty结构
+
+生产者
+11发送消息返回的四种类型 除了SEND_OK 都会造成消息丢失 需要进行重新投递
+
+12延迟消息 发到broker之后被consumer延迟消费 只支持固定精度（任意精度涉及到消息排序 会影响性能） message.setDelayTimeLevel(2);
+
+13自定义发送规则 发送到第二个队列中defaultMQProducer.send(message, new MessageQueueSelector() {},2）;
+
+消费者
+14 消息模式 setMessageModel()
+    1消费者的group相同的条件下 （过滤不可以用表达式）
+        集群模式 
+	1两个消费者只消费topic其中的一部分消息 即两个消费者消费的消息不会重复
+	2 不可以做到过滤 不知道消息会被哪边消费
+         广播模式 
+	1消费topic中的所有消息 即消息会被两个消费者都消费一遍，会重复
+	2 因为每个消费者都会消费一遍消息的缘故 这边可以在消费消息的时候做过滤，利用消息可获得tag msg.getTags（但是不能在订阅主题的时候用表达式来过滤）
+     2消费者的group不同的条件下 （过滤可以用表达式）
+          可以做过滤 group不同的话代表单独的不同组的消费者 可以通过表达式来过滤
+
+    过滤的三种方式 	1tag过滤（同一个消费者组订阅的主题，Tag必须相同）
+	           	2sql过滤
+		  broker-*.properties中里配置enablePropertyFilter =true
+		  生产者消息组装的时候的属性 msg.putUserProperty("age", i+"");
+		  消费者消息订阅的时候consumer.subscribe("GumxTest", MessageSelector.bySql("age between 0 and 8"));
+		3filterServer过滤（将过滤交给broker）
+		 服务器broker-*.properties中配置 filterServerNums=1（指明过滤文件个数 ） 启动mqfiltersrv
+		 生产者消息组装的时候的属性 msg.putUserProperty("age", i+"");
+		 创建过滤的类MyMessageFilter implements MessageFilter
+		 消费者消息订阅的时候
+		 String filterCode = MixAll.file2String(MyMessageFilter类文件的绝对路径); 
+		 consumer.subscribe("GumxTest", "com.gwd.rocketmq.MyMessageFilter",filterCode);
+
+15 offset偏移量 是消息消费进度的核心 是指某个topic下的一条消息在某个MessageQueue的位置
+       集群模式 采用的是远程文件存储offset 是在broker上存储 
+	      由于集群模式中的consumer只消费一部分的消息，两个consumer之间容易干扰 需要在broker上记录消费消息的offset，
+	      下次consumer再去broker消费的时候，要去broker查询offset的位置来判断这条消息是否消费
+       广播模式 采用的是本地文件存储offset
+
+16 消费模式  push模式  broker推消息给client 包括广播和集群模式 缺点 offset的记录由服务器自己自动维护  增加服务器的负担 
+	    pull模式   client主动从broker拉消息  缺点 offset需要client端自己维护存储起来 设置拉取时间不合适浪费性能 间隔时间过长导致消息堆积
+	    长轮询机制 client发送请求给broker 如果发现broker中的队列里没有消息 不立即返回 而是hold住这个请求n秒 
+		      然后每隔m秒去轮番查询一下队列中有无消息 如果有消息则返回消息给client  如果没有则在n秒的时候返回空
+
+17 消息存储方式 内存+磁盘 先存到内存 一定时间内写到磁盘中 内存保证了速度，磁盘保证了容量以及消息的可靠性
+    同步刷盘方式：消息写入磁盘后再返回成功状态。
+    异步刷盘方式：消息写入内存后就返回成功状态 提高了性能 写速度飞快 但是容易丢失数据。
+
+18 同步复制（同步双写）：等Master和Slave都写入成功后才返回写入成功 但是会需要master与slave通信。
+     异步复制：Master写入成功后就返回写入成功 master宕机的时候会造成数据丢失。
+采用同步复制 异步刷盘的机制来保证消息的高可靠性
+
+19 master-slave 高可用
+         master读写的功能  slave只读
+         使用多个group组或者写脚本监控master-slave是否超时，超时的话master-slave之间相互切换并重启
+
+20 nameserver的协调服务 相当于zookeeper的功能
+     

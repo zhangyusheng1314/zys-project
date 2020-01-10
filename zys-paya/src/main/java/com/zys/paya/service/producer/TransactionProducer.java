@@ -11,7 +11,7 @@ import javax.annotation.Resource;
 import java.util.concurrent.*;
 
 /**
- * 分布式事务消息扣款
+ * 分布式事务消息扣款 发送消息给payb模块 a账户扣款 b账户加钱
  */
 @Component
 public class TransactionProducer implements InitializingBean {
@@ -37,7 +37,7 @@ public class TransactionProducer implements InitializingBean {
         this.producer.setExecutorService(executorService);
         this.producer.setNamesrvAddr(NAME_SERVER);
     }
-
+    //监听本地分布式事务
     @Override
     public void afterPropertiesSet() throws Exception {
         this.producer.setTransactionListener(transactionListenerImpl);

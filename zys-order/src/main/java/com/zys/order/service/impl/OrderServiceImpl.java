@@ -39,7 +39,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderDao, Order> implements Or
     public static final String PKG_TOPIC = "pkg_topic";
 
     public static final String PKG_TAGS = "pkg";
-
+    //对dubbo暴露接口的调用
     @Reference(
             version = "1.0.0",
             application = "${dubbo.application.id}",
@@ -122,7 +122,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderDao, Order> implements Or
         Order order = orderDao.selectById(orderId);
         int messageQueueNumber = Integer.parseInt(order.getSupplierId());
 
-        //对应的顺序消息的生产者 把messageList 发出去
+        //对应的顺序消息的生产者 把messageList 发出去通知物流模块
         pkgProducer.sendOrderlyMessage(messageList, messageQueueNumber);
     }
 }
